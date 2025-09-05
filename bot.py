@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 from telegram import (
     InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo,
-    ReplyKeyboardMarkup, KeyboardButton, MenuButtonWebApp, MenuButtonDefault
+    MenuButtonWebApp, MenuButtonDefault
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
@@ -29,6 +29,8 @@ LINK_PRINCIPAL = os.getenv("LINK_PRINCIPAL")
 LINK_SECOURS = os.getenv("LINK_SECOURS")
 LINK_FEEDBACK = os.getenv("LINK_FEEDBACK")
 WEBAPP_URL = os.getenv("WEBAPP_URL")
+
+INFO_TEXT = '📦 Horaires de Livraison 📦\n\n🕘 Prise de commande\n12h - 05h\n\n🚚 Livraison\n14h - 05h\n\n🤝 Meetup\nDisponible 24h/24h 7j/7\n\n🚚 Minimum de commande : 100€ 🎉\n(sauf zones éloignées — un autre minimum peut être demandé)\n\nℹ️ Tout savoir sur nous ℹ️\n\n👋 Bienvenue chez BaltiFamily 🏆✨\n\n✅ Large sélection de produits des 4 coins du monde.\n🍀 Menu mis à jour régulièrement.\n💎 Prix attractifs, produits premium.\n🤝 Équipe sérieuse, pro et à l’écoute.\n🙏 Merci pour votre confiance.\n\n🚚 Comment être livré 🚚\n🔒 Envoyez :\n- 🪪 Photo avec pièce d’identité\n- ✋ Photo de l’argent en main\n- 📹 Vidéo avec la date du jour\n\n⬇️ Exemple de commande ⬇️\n\n🛍 Commande : …\n🏡 Adresse : …\n📱 Téléphone : …\n\n⚠️ Commandes uniquement sur WhatsApp ou Telegram ⚠️'
 
 # ------------------ Helpers ------------------
 def _safe_url(u: Optional[str]) -> Optional[str]:
@@ -71,21 +73,10 @@ def build_main_inline() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(rows)
 
 def build_info_inline() -> InlineKeyboardMarkup:
-    """Info screen: WebApp + Back."""
+    """Info screen: ONLY Back (no WebApp button here)."""
     rows = []
-    w = _webapp_info()
-    if w:
-        rows.append([InlineKeyboardButton("🛒 Ouvrir l’app", web_app=w)])
     rows.append([InlineKeyboardButton("⬅️ Retour", callback_data="back")])
     return InlineKeyboardMarkup(rows)
-
-def reply_keyboard() -> Optional[ReplyKeyboardMarkup]:
-    """Persistent keyboard with WebApp button."""
-    w = _webapp_info()
-    if not w:
-        return None
-    kb = [[KeyboardButton(text="🛒 Ouvrir l’app", web_app=w)]]
-    return ReplyKeyboardMarkup(kb, resize_keyboard=True, one_time_keyboard=False)
 
 async def safe_reply_photo(msg, url: Optional[str], *, caption=None, reply_markup=None):
     """Try to send photo; else send text without failing."""
@@ -94,7 +85,7 @@ async def safe_reply_photo(msg, url: Optional[str], *, caption=None, reply_marku
             raise ValueError("Invalid or empty image URL")
         await msg.reply_photo(photo=url, caption=caption, reply_markup=reply_markup)
     except Exception as e:
-        logger.warning("Photo unavailable (%s). Sending text.", e)
+        logging.getLogger(__name__).warning("Photo unavailable (%s). Sending text.", e)
         text = (caption or "Informations") + "\n\n(📷 Image indisponible)"
         await msg.reply_text(text, reply_markup=reply_markup, disable_web_page_preview=True)
 
@@ -102,31 +93,33 @@ async def safe_edit_message(query, *, new_caption: Optional[str], new_text: Opti
     """Edit caption if photo, else edit text, else fallback to new message."""
     try:
         if query.message and query.message.photo:
+            # Keep simple caption on photo screens
             await query.edit_message_caption(caption=new_caption or "", reply_markup=reply_markup)
+            # Also send a separate text message if detailed info is provided
+            if new_text and new_text != new_caption:
+                await query.message.reply_text(new_text, disable_web_page_preview=True, reply_markup=reply_markup)
         else:
             await query.edit_message_text(text=new_text or "", reply_markup=reply_markup, disable_web_page_preview=True)
     except Exception as e:
-        logger.warning("Cannot edit message (%s). Sending new message.", e)
+        logging.getLogger(__name__).warning("Cannot edit message (%s). Sending new message.", e)
         await query.message.reply_text(new_text or new_caption or "Informations", reply_markup=reply_markup, disable_web_page_preview=True)
 
 # ------------------ Handlers ------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    rk = reply_keyboard()
     await safe_reply_photo(
         update.message,
         WELCOME_IMAGE,
         caption="Bienvenue Chez 🏢BALTIMORE COFFEE 06🏢✨",
         reply_markup=build_main_inline(),
     )
-    if rk:
-        await update.message.reply_text("Ouvrir l’app via le bouton ci-dessous :", reply_markup=rk)
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     if query.data == "info":
+        # Send compact caption on the original message + full text as a new message
         caption = "Informations & Livraison"
-        await safe_edit_message(query, new_caption=caption, new_text=caption, reply_markup=build_info_inline())
+        await safe_edit_message(query, new_caption=caption, new_text=INFO_TEXT, reply_markup=build_info_inline())
     elif query.data == "back":
         caption = "Bienvenue Chez 🏢BALTIMORE COFFEE 06🏢✨"
         await safe_edit_message(query, new_caption=caption, new_text=caption, reply_markup=build_main_inline())
