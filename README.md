@@ -1,4 +1,3 @@
-
 # Bot Telegram "Baltimore" — Déploiement GitHub Actions (gratuit)
 
 Ce repo lance le bot via **GitHub Actions** et le **relance toutes les 5 heures**
@@ -25,3 +24,23 @@ python bot.py
 - Le workflow s'exécute max ~6 heures/launch (limite GitHub). Il est replanifié toutes les 5h.
 - Le bouton "Contact 📱" demande le numéro (request_contact=True).
 - Le bouton "Baltimore MiniApp🤖" ouvre votre WebApp Netlify.
+
+
+# Telegram Bot – Déploiement local & GitHub Actions
+
+## Variables d'environnement requises
+- `BOT_TOKEN` (secret): token du bot Telegram.
+- `WEBAPP_URL` (variable): `https://jovial-puffpuff-f0e4f9.netlify.app/` (ou votre URL).
+- Optionnelles: `WELCOME_IMAGE`, `INFO_IMAGE`, `LINK_PRINCIPAL`, `LINK_SECOURS`, `LINK_FEEDBACK`.
+
+## Lancer en local
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+export BOT_TOKEN="12345:ABC"
+export WEBAPP_URL="https://jovial-puffpuff-f0e4f9.netlify.app/"
+python bot.py
+```
+
+## GitHub Actions
+Le workflow ci-dessous empêche les chevauchements via `concurrency` et peut être planifié toutes les 6h.

@@ -1,7 +1,9 @@
-
+# bot.py
 import os
 import logging
 from typing import Optional
+from urllib.parse import urlparse
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.ext import (
     Application,
@@ -23,7 +25,7 @@ if not BOT_TOKEN:
 WELCOME_IMAGE = os.getenv("WELCOME_IMAGE")
 INFO_IMAGE = os.getenv("INFO_IMAGE")
 
-# Liens (peuvent être vides, on filtrera)
+# Liens (peuvent être vides; on filtre)
 LINK_PRINCIPAL = os.getenv("LINK_PRINCIPAL")
 LINK_SECOURS = os.getenv("LINK_SECOURS")
 LINK_FEEDBACK = os.getenv("LINK_FEEDBACK")
@@ -31,12 +33,16 @@ WEBAPP_URL = os.getenv("WEBAPP_URL")
 
 # ------------------ Helpers ------------------
 def _safe_url(u: Optional[str]) -> Optional[str]:
-    """Retourne l'URL si valide (http/https), sinon None."""
+    """Retourne l'URL si valide (http/https + host), sinon None."""
     if not u:
         return None
-    u = u.strip()
-    if u.startswith("http://") or u.startswith("https://"):
-        return u
+    u = u.strip().strip('"').strip("'")
+    try:
+        p = urlparse(u)
+        if p.scheme in ("http", "https") and p.netloc:
+            return u
+    except Exception:
+        pass
     return None
 
 def build_links_inline() -> InlineKeyboardMarkup:
@@ -55,10 +61,15 @@ def build_links_inline() -> InlineKeyboardMarkup:
     if f:
         rows.append([InlineKeyboardButton("📢 Feedback", url=f)])
     if w:
+        # Bouton WebApp uniquement si URL valide
         rows.append([InlineKeyboardButton("🛒 Ouvrir l’app", web_app=WebAppInfo(url=w))])
 
     # Toujours au moins un bouton callback valide
     rows.append([InlineKeyboardButton("ℹ️ Informations", callback_data="info")])
+
+    # Log des boutons effectivement ajoutés (debug)
+    logger.info("Boutons actifs: principal=%s, secours=%s, feedback=%s, webapp=%s",
+                bool(p), bool(s), bool(f), bool(w))
 
     return InlineKeyboardMarkup(rows)
 
@@ -66,7 +77,7 @@ async def safe_reply_photo(msg, url: Optional[str], *, caption=None, reply_marku
     """Essaye d’envoyer une photo ; si l’URL est vide/invalide ou que Telegram refuse,
     envoie un texte à la place (sans planter)."""
     try:
-        if not url or "..." in url or not _safe_url(url):
+        if not _safe_url(url):
             raise ValueError("Invalid or empty image URL")
         await msg.reply_photo(photo=url, caption=caption, reply_markup=reply_markup)
     except Exception as e:
@@ -86,7 +97,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-
     if query.data == "info":
         await safe_reply_photo(query.message, INFO_IMAGE, caption="Informations & Livraison")
 
@@ -97,12 +107,21 @@ async def echo_debug(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ------------------ Main ------------------
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
+
+    # IMPORTANT: s'assurer que le bot n'est pas en webhook (on passe en polling)
+    # et vider les updates en attente pour éviter les collisions au démarrage.
+    async def _startup(application: Application):
+        await application.bot.delete_webhook(drop_pending_updates=True)
+        logger.info("Webhook supprimé, passage en polling.")
+
+    app.post_init = _startup  # exécuté avant run_polling
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo_debug))
 
     logger.info("Bot démarré, connexion à Telegram (polling)...")
-    app.run_polling()
+    app.run_polling(allowed_updates=Update.ALL_TYPES, poll_interval=2.0)
 
 if __name__ == "__main__":
     main()
