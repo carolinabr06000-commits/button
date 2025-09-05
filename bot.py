@@ -2,7 +2,7 @@
 import os
 import logging
 from typing import Optional
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -27,6 +27,7 @@ INFO_IMAGE = os.getenv("INFO_IMAGE")
 LINK_PRINCIPAL = os.getenv("LINK_PRINCIPAL")
 LINK_SECOURS = os.getenv("LINK_SECOURS")
 LINK_FEEDBACK = os.getenv("LINK_FEEDBACK")
+WEBAPP_URL = os.getenv("WEBAPP_URL")
 
 # ------------------ Helpers ------------------
 def _safe_url(u: Optional[str]) -> Optional[str]:
@@ -45,6 +46,7 @@ def build_links_inline() -> InlineKeyboardMarkup:
     p = _safe_url(LINK_PRINCIPAL)
     s = _safe_url(LINK_SECOURS)
     f = _safe_url(LINK_FEEDBACK)
+    w = _safe_url(WEBAPP_URL)
 
     if p:
         rows.append([InlineKeyboardButton("🌐 Principal", url=p)])
@@ -52,6 +54,8 @@ def build_links_inline() -> InlineKeyboardMarkup:
         rows.append([InlineKeyboardButton("🔗 Secours", url=s)])
     if f:
         rows.append([InlineKeyboardButton("📢 Feedback", url=f)])
+    if w:
+        rows.append([InlineKeyboardButton("🛒 Ouvrir l’app", web_app=WebAppInfo(url=w))])
 
     # Toujours au moins un bouton callback valide
     rows.append([InlineKeyboardButton("ℹ️ Informations", callback_data="info")])
