@@ -27,10 +27,9 @@ jobs:
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           WELCOME_IMAGE: ${{ vars.WELCOME_IMAGE }}
-          WEBAPP_URL: ${{ vars.WEBAPP_URL }}
+          INFO_IMAGE: ${{ vars.INFO_IMAGE }}
           LINK_PRINCIPAL: ${{ vars.LINK_PRINCIPAL }}
           LINK_SECOURS: ${{ vars.LINK_SECOURS }}
           LINK_FEEDBACK: ${{ vars.LINK_FEEDBACK }}
-          INFO_IMAGE: ${{ vars.INFO_IMAGE }}
         run: |
           python bot.py
